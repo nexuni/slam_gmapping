@@ -66,6 +66,7 @@ class SlamGMapping
     ros::Publisher entropy_publisher_;
     ros::Publisher sst_;
     ros::Publisher sstm_;
+    ros::Publisher estimated_pose_pub;
     ros::ServiceServer ss_;
     tf::TransformListener tf_;
     message_filters::Subscriber<sensor_msgs::LaserScan>* scan_filter_sub_;

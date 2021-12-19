@@ -127,6 +127,7 @@ Initial map dimensions and resolution:
 #include "ros/ros.h"
 #include "ros/console.h"
 #include "nav_msgs/MapMetaData.h"
+#include "geometry_msgs/PoseStamped.h"
 
 #include "gmapping/sensor/sensor_range/rangesensor.h"
 #include "gmapping/sensor/sensor_odometry/odometrysensor.h"
@@ -271,6 +272,7 @@ void SlamGMapping::startLiveSlam()
   entropy_publisher_ = private_nh_.advertise<std_msgs::Float64>("entropy", 1, true);
   sst_ = node_.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
+  estimated_pose_pub = node_.advertise<geometry_msgs::PoseStamped>("map_match_pose", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamGMapping::mapCallback, this);
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
   scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
@@ -797,8 +799,41 @@ SlamGMapping::mapCallback(nav_msgs::GetMap::Request  &req,
 
 void SlamGMapping::publishTransform()
 {
+  // Fix this part so that transform is not publish, and pose is publish instead
   map_to_odom_mutex_.lock();
-  ros::Time tf_expiration = ros::Time::now() + ros::Duration(tf_delay_);
-  tfB_->sendTransform( tf::StampedTransform (map_to_odom_, tf_expiration, map_frame_, odom_frame_));
+  // ros::Time tf_expiration = ros::Time::now() + ros::Duration(tf_delay_);
+  // tfB_->sendTransform( tf::StampedTransform (map_to_odom_, tf_expiration, map_frame_, odom_frame_));
+
+  // Publish estimated pose in map frame
+  GMapping::OrientedPoint gmap_pose;
+  getOdomPose(gmap_pose, ros::Time::now()-ros::Duration(0.5));
+
+  geometry_msgs::PoseStamped msg;
+  msg.header.stamp = ros::Time::now();
+  msg.header.frame_id = map_frame_;
+
+  tf::Matrix3x3 current_basis = map_to_odom_.getBasis();
+  tf::Vector3 current_origin = map_to_odom_.getOrigin();
+
+  msg.pose.position.x = gmap_pose.x + current_origin.getX();
+  msg.pose.position.y = gmap_pose.y + current_origin.getY();
+  msg.pose.position.z = current_origin.getZ();
+
+  double roll, pitch, yaw;
+  current_basis.getRPY(roll, pitch, yaw);
+
+  yaw += gmap_pose.theta;
+
+  /**< rpy -> quaternion */
+  tf::Quaternion q3;
+  q3.setRPY(roll, pitch, yaw);
+  q3.normalize();
+
+  msg.pose.orientation.x = q3.getX();
+  msg.pose.orientation.y = q3.getY();
+  msg.pose.orientation.z = q3.getZ();
+  msg.pose.orientation.w = q3.getW();
+
+  estimated_pose_pub.publish(msg);
   map_to_odom_mutex_.unlock();
 }
