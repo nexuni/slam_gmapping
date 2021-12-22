@@ -89,6 +89,7 @@ class SlamGMapping
     bool got_first_scan_;
 
     bool got_map_;
+    bool ros_bag_playback;
     nav_msgs::GetMap::Response map_;
 
     ros::Duration map_update_interval_;
@@ -148,6 +149,7 @@ class SlamGMapping
     ros::NodeHandle private_nh_;
     
     unsigned long int seed_;
+    ros::Time initialized_time;
     
     double transform_publish_period_;
     double tf_delay_;

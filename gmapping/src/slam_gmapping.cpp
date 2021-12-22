@@ -260,9 +260,13 @@ void SlamGMapping::init()
     lasamplerange_ = 0.005;
   if(!private_nh_.getParam("lasamplestep", lasamplestep_))
     lasamplestep_ = 0.005;
+  if(!private_nh_.getParam("rosbag", ros_bag_playback))
+    ros_bag_playback = false;
     
   if(!private_nh_.getParam("tf_delay", tf_delay_))
     tf_delay_ = transform_publish_period_;
+
+  initialized_time = ros::Time::now();
 
 }
 
@@ -806,7 +810,16 @@ void SlamGMapping::publishTransform()
 
   // Publish estimated pose in map frame
   GMapping::OrientedPoint gmap_pose;
-  getOdomPose(gmap_pose, ros::Time::now()-ros::Duration(0.5));
+  if (ros_bag_playback){
+    if (ros::Time::now().toSec()-0.25 <= initialized_time.toSec()){
+      getOdomPose(gmap_pose, initialized_time);
+    } else {
+      getOdomPose(gmap_pose, ros::Time::now()-ros::Duration(0.25));
+    }
+  }
+  else{
+    getOdomPose(gmap_pose, ros::Time::now()-ros::Duration(0.5));
+  }
 
   geometry_msgs::PoseWithCovarianceStamped msg;
   msg.header.stamp = ros::Time::now();
