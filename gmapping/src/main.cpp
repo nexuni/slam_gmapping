@@ -30,18 +30,51 @@
 /* Author: Brian Gerkey */
 
 #include <ros/ros.h>
-
+#include <std_msgs/String.h>
 #include "slam_gmapping.h"
 
-int
-main(int argc, char** argv)
-{
-  ros::init(argc, argv, "slam_gmapping");
+uint8_t restart_flag_;
+bool isSlamOk_;
 
+boost::mutex mutex_;
+
+void sysCmdCallback(const std_msgs::String& sys_cmd)
+  {
+    if (sys_cmd.data == "reset")
+    {
+      boost::mutex::scoped_lock lock(mutex_);
+      restart_flag_ = 1;
+      isSlamOk_ = false;
+    }
+  }
+
+
+int main(int argc, char** argv)
+{
+  isSlamOk_ = false;
+  restart_flag_ = 1;
+  ros::init(argc, argv, "slam_gmapping");
+  ros::NodeHandle n;
   SlamGMapping gn;
   gn.startLiveSlam();
-  ros::spin();
+
+  ros::Subscriber sub = n.subscribe("/map_reset", 10, sysCmdCallback);
+
+  ros::Rate rate(20);
+  while (ros::ok())
+  {
+    if(restart_flag_ != 0)
+    {
+      ROS_INFO("Resetting map...");
+      restart_flag_ = 0;
+      gn.restart();
+      ros::Duration(0.3).sleep();
+      isSlamOk_ = true;
+    }
+    ros::MultiThreadedSpinner s(3);
+    ros::spinOnce();
+    rate.sleep();
+  }
 
   return(0);
 }
-

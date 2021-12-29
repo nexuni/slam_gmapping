@@ -52,6 +52,7 @@ class SlamGMapping
     ~SlamGMapping();
 
     void init();
+    void restart();
     void startLiveSlam();
     void startReplay(const std::string & bag_fname, std::string scan_topic);
     void publishTransform();
@@ -62,6 +63,8 @@ class SlamGMapping
     void publishLoop(double transform_publish_period);
 
   private:
+    volatile bool shouldTerminate;
+
     ros::NodeHandle node_;
     ros::Publisher entropy_publisher_;
     ros::Publisher sst_;

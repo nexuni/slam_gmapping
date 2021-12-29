@@ -142,7 +142,7 @@ Initial map dimensions and resolution:
 
 SlamGMapping::SlamGMapping():
   map_to_odom_(tf::Transform(tf::createQuaternionFromRPY( 0, 0, 0 ), tf::Point(0, 0, 0 ))),
-  laser_count_(0), private_nh_("~"), scan_filter_sub_(NULL), scan_filter_(NULL), transform_thread_(NULL)
+  laser_count_(0), private_nh_("~"), scan_filter_sub_(NULL), scan_filter_(NULL), transform_thread_(NULL),shouldTerminate(false)
 {
   seed_ = time(NULL);
   init();
@@ -150,7 +150,7 @@ SlamGMapping::SlamGMapping():
 
 SlamGMapping::SlamGMapping(ros::NodeHandle& nh, ros::NodeHandle& pnh):
   map_to_odom_(tf::Transform(tf::createQuaternionFromRPY( 0, 0, 0 ), tf::Point(0, 0, 0 ))),
-  laser_count_(0),node_(nh), private_nh_(pnh), scan_filter_sub_(NULL), scan_filter_(NULL), transform_thread_(NULL)
+  laser_count_(0),node_(nh), private_nh_(pnh), scan_filter_sub_(NULL), scan_filter_(NULL), transform_thread_(NULL),shouldTerminate(false)
 {
   seed_ = time(NULL);
   init();
@@ -159,7 +159,7 @@ SlamGMapping::SlamGMapping(ros::NodeHandle& nh, ros::NodeHandle& pnh):
 SlamGMapping::SlamGMapping(long unsigned int seed, long unsigned int max_duration_buffer):
   map_to_odom_(tf::Transform(tf::createQuaternionFromRPY( 0, 0, 0 ), tf::Point(0, 0, 0 ))),
   laser_count_(0), private_nh_("~"), scan_filter_sub_(NULL), scan_filter_(NULL), transform_thread_(NULL),
-  seed_(seed), tf_(ros::Duration(max_duration_buffer))
+  seed_(seed), tf_(ros::Duration(max_duration_buffer)),shouldTerminate(false)
 {
   init();
 }
@@ -278,12 +278,66 @@ void SlamGMapping::startLiveSlam()
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
   estimated_pose_pub = node_.advertise<geometry_msgs::PoseWithCovarianceStamped>("map_match_pose", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamGMapping::mapCallback, this);
+  // scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
+  // scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
+  // scan_filter_->registerCallback(boost::bind(&SlamGMapping::laserCallback, this, _1));
+
+  // transform_thread_ = new boost::thread(boost::bind(&SlamGMapping::publishLoop, this, transform_publish_period_));
+}
+
+void SlamGMapping::restart()
+{
+  if(transform_thread_)
+  {
+    delete transform_thread_;
+    transform_thread_ = NULL;
+  }
+
+  if(scan_filter_)
+  {
+    delete scan_filter_;
+    scan_filter_ = NULL;
+  }
+
+  if(scan_filter_sub_)
+  {
+    delete scan_filter_sub_;
+    scan_filter_sub_ = NULL;
+  }
+
+  if(gsp_)
+  {
+    delete gsp_;
+    gsp_ = NULL;
+  }
+
+  map_to_odom_= tf::Transform(tf::createQuaternionFromRPY( 0, 0, 0 ), tf::Point(0, 0, 0 ));
+  laser_count_ = 0;
+
+  seed_ = time(NULL);
+
+  gsp_ = new GMapping::GridSlamProcessor();
+  ROS_ASSERT(gsp_);
+
+  if(gsp_laser_)
+  {
+    delete gsp_laser_;
+    gsp_laser_ = NULL;
+  }
+  if(gsp_odom_)
+  {
+    delete gsp_odom_;
+    gsp_odom_ = NULL;
+  }
+
+  got_first_scan_ = false;
+
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
   scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
   scan_filter_->registerCallback(boost::bind(&SlamGMapping::laserCallback, this, _1));
-
   transform_thread_ = new boost::thread(boost::bind(&SlamGMapping::publishLoop, this, transform_publish_period_));
 }
+
 
 void SlamGMapping::startReplay(const std::string & bag_fname, std::string scan_topic)
 {
@@ -360,7 +414,7 @@ void SlamGMapping::publishLoop(double transform_publish_period){
     return;
 
   ros::Rate r(1.0 / transform_publish_period);
-  while(ros::ok()){
+  while(ros::ok() && !shouldTerminate){
     publishTransform();
     r.sleep();
   }
