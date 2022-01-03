@@ -262,6 +262,8 @@ void SlamGMapping::init()
     lasamplestep_ = 0.005;
   if(!private_nh_.getParam("rosbag", ros_bag_playback))
     ros_bag_playback = false;
+  if(!private_nh_.getParam("gmapping_publish_tf", gmapping_publish_tf_))
+    gmapping_publish_tf_ = false;
     
   if(!private_nh_.getParam("tf_delay", tf_delay_))
     tf_delay_ = transform_publish_period_;
@@ -859,8 +861,11 @@ void SlamGMapping::publishTransform()
 {
   // Fix this part so that transform is not publish, and pose is publish instead
   map_to_odom_mutex_.lock();
-  // ros::Time tf_expiration = ros::Time::now() + ros::Duration(tf_delay_);
-  // tfB_->sendTransform( tf::StampedTransform (map_to_odom_, tf_expiration, map_frame_, odom_frame_));
+
+  if (gmapping_publish_tf_){
+    ros::Time tf_expiration = ros::Time::now() + ros::Duration(tf_delay_);
+    tfB_->sendTransform( tf::StampedTransform (map_to_odom_, tf_expiration, map_frame_, odom_frame_));
+  }
 
   // Publish estimated pose in map frame
   GMapping::OrientedPoint gmap_pose;

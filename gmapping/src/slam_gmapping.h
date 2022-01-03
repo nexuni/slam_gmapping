@@ -93,6 +93,7 @@ class SlamGMapping
 
     bool got_map_;
     bool ros_bag_playback;
+    bool gmapping_publish_tf_;
     nav_msgs::GetMap::Response map_;
 
     ros::Duration map_update_interval_;
