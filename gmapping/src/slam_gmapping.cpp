@@ -880,21 +880,29 @@ void SlamGMapping::publishTransform()
     getOdomPose(gmap_pose, ros::Time::now()-ros::Duration(0.5));
   }
 
+  tf::Transform odom_to_base_link;
+  tf::Vector3 ob_origin(gmap_pose.x, gmap_pose.y, 0.0);
+  odom_to_base_link.setOrigin(ob_origin);
+
+  tf::Quaternion ob_quat;
+  ob_quat.setRPY(0.0, 0.0, gmap_pose.theta);
+  odom_to_base_link.setRotation(ob_quat);
+
+  tf::Transform gmap_pose_tf = map_to_odom_ * odom_to_base_link;
+
   geometry_msgs::PoseWithCovarianceStamped msg;
   msg.header.stamp = ros::Time::now();
   msg.header.frame_id = map_frame_;
 
-  tf::Matrix3x3 current_basis = map_to_odom_.getBasis();
-  tf::Vector3 current_origin = map_to_odom_.getOrigin();
+  tf::Matrix3x3 current_basis = gmap_pose_tf.getBasis();
+  tf::Vector3 current_origin = gmap_pose_tf.getOrigin();
 
-  msg.pose.pose.position.x = gmap_pose.x + current_origin.getX();
-  msg.pose.pose.position.y = gmap_pose.y + current_origin.getY();
+  msg.pose.pose.position.x = current_origin.getX();
+  msg.pose.pose.position.y = current_origin.getY();
   msg.pose.pose.position.z = current_origin.getZ();
 
   double roll, pitch, yaw;
   current_basis.getRPY(roll, pitch, yaw);
-
-  yaw += gmap_pose.theta;
 
   /**< rpy -> quaternion */
   tf::Quaternion q3;
